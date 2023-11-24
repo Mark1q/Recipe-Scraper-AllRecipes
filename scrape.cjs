@@ -2,7 +2,7 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 
 (async () =>{
-    const browser = await puppeteer.launch({headless : false});
+    const browser = await puppeteer.launch({headless : 'new'});
     const page = await browser.newPage();
 
     await page.goto('https://www.allrecipes.com/');
@@ -39,7 +39,7 @@ const fs = require('fs');
 
         // scroll to get everything to load up
         // await page.evaluate(() => window.scrollBy(50,10000));
-        await delay(2000);
+        await delay(1000);
 
         // getting the links into an array
         const recipesLinksElements = await page.evaluate(() =>{
@@ -52,12 +52,12 @@ const fs = require('fs');
         // subcategories again to get the 
         // important information(e.g. cook time, prep time, ingredients etc.)
 
-        for(let j = 0 ; j < recipesLinksElements.length ; j ++){
+        for(let j = 0 ; j < /*recipesLinksElements.length*/10 ; j ++){
             await page.goto(recipesLinksElements[j]);
 
             // scroll to get everything to load up
             // await page.evaluate(() => window.scrollBy(50,10000));
-            await delay(2000);
+            await delay(1000);
 
             const mainRecipeLinks = await page.evaluate(() =>{
                 const elements = Array.from(document.getElementsByClassName("comp mntl-card-list-items mntl-document-card mntl-card card card--no-image"));
@@ -85,9 +85,14 @@ const fs = require('fs');
             for(let k = 0 ; k < mainRecipeLinks.length ; k ++){
                 await page.goto(mainRecipeLinks[k]);
 
+                /*console.clear();
+                console.log(`${i} : ${pagesLinks.length} : ${pagesLinks[i]}`);
+                console.log(`${j} : ${recipesLinksElements.length } : ${recipesLinksElements[j]}`);
+                console.log(`${k} : ${mainRecipeLinks.length} : ${mainRecipeLinks[k]}`)*/
+
                 // scroll to get everything to load up
                 // await page.evaluate(() => window.scrollBy(50,10000));
-                await delay(2000);
+                await delay(1000);
                 const webData = await page.evaluate((link) =>{
 
                     function funInnerText(element){
@@ -97,73 +102,81 @@ const fs = require('fs');
                     
                         return '';
                     }
+                    try{
+                        let reviewText = funInnerText(document.getElementById('recipe-review-bar_1-0'));
+                        reviewText = reviewText.split(/[\n]+/);
+        
+                        const reviewRecipe = reviewText[0] + reviewText[1];
+                        const descriptionRecipe = funInnerText(document.getElementById("article-subheading_1-0"));
+                        const authorRecipe = funInnerText(Array.from(document.getElementsByClassName("mntl-attribution__item-name"))[0]);
+                        const publishUpdateRecipe = funInnerText(Array.from(document.getElementsByClassName("mntl-attribution__item-date"))[0]);
+                        const recipeImage = Array.from(document.getElementsByClassName("img-placeholder"))[0].querySelector('img').src;
+                        
+                        let timersRecipeArray = Array.from(document.getElementsByClassName("mntl-recipe-details__item"));
+                        let timers = {};
+                        timersRecipeArray = timersRecipeArray.map((el) => {
+                            el = funInnerText(el)
 
-                    let reviewText = funInnerText(document.getElementById('recipe-review-bar_1-0'));
-                    reviewText = reviewText.split(/[\n]+/);
-    
-                    const reviewRecipe = reviewText[0] + reviewText[1];
-                    const descriptionRecipe = funInnerText(document.getElementById("article-subheading_1-0"));
-                    const authorRecipe = funInnerText(Array.from(document.getElementsByClassName("mntl-attribution__item-name"))[0]);
-                    const publishUpdateRecipe = funInnerText(Array.from(document.getElementsByClassName("mntl-attribution__item-date"))[0]);
-                    const recipeImage = Array.from(document.getElementsByClassName("img-placeholder"))[0].querySelector('img').src;
-                    
-                    let timersRecipeArray = Array.from(document.getElementsByClassName("mntl-recipe-details__item"));
-                    let timers = {};
-                    timersRecipeArray = timersRecipeArray.map((el) => {
-                        el = funInnerText(el)
+                            const timerName = el.split('\n')[0];
+                            const timerValue = el.split('\n')[1];
 
-                        const timerName = el.split('\n')[0];
-                        const timerValue = el.split('\n')[1];
+                            timers[timerName] = timerValue;
+                        });
+        
+                        let ingredientsRecipeArray = Array.from(document.getElementsByClassName("mntl-structured-ingredients__list-item"))
+        
+                        const ingredientsRecipe = ingredientsRecipeArray.map((elements) => funInnerText(elements));
 
-                        timers[timerName] = timerValue;
-                    });
-    
-                    let ingredientsRecipeArray = Array.from(document.getElementsByClassName("mntl-structured-ingredients__list-item"))
-    
-                    const ingredientsRecipe = ingredientsRecipeArray.map((elements) => funInnerText(elements));
+                        let directions = {};
+                        let directionsText = funInnerText(document.getElementById("recipe__steps_1-0")).split('\n\n');
+                        directionsText.shift();
 
-                    let directions = {};
-                    let directionsText = funInnerText(document.getElementById("recipe__steps_1-0")).split('\n\n');
-                    directionsText.shift();
+                        let i = -2;
 
-                    let i = -2;
+                        directionsText = directionsText.map((el,index) =>{
+                            if(el == 'Cook’s Note'){
+                                i = index;
+                                directions[el] = directionsText[index + 1];
+                            }
+                            else if(i != index - 1){
+                                directions[`Step ${index + 1}`] = el;
+                            }
+                        })
 
-                    directionsText = directionsText.map((el,index) =>{
-                        if(el == 'Cook’s Note'){
-                            i = index;
-                            directions[el] = directionsText[index + 1];
+                        let nutritionalValues = {};
+
+                        let nutritional = Array.from(document.getElementById("recipe__nutrition-facts_1-0").querySelectorAll('tr'));
+                        nutritional = nutritional.map((el) => {
+                            el = funInnerText(el);
+                            el = el.split('\n');
+                            if(el[1] != undefined){
+                                nutritionalValues[el[1]] = el[0];
+                            }
+                        });
+
+                        return{
+                            Link : link,
+                            Review : reviewRecipe,
+                            Description : descriptionRecipe,
+                            Author : authorRecipe,
+                            Publish_Update_Date : publishUpdateRecipe,
+                            Image : recipeImage,
+                            Details : timers,
+                            Ingredients : ingredientsRecipe,
+                            Directions : directions,
+                            Nutritional_Values_Per_Serving : nutritionalValues
                         }
-                        else if(i != index - 1){
-                            directions[`Step ${index + 1}`] = el;
-                        }
-                    })
 
-                    let nutritionalValues = {};
-
-                    let nutritional = Array.from(document.getElementById("recipe__nutrition-facts_1-0").querySelectorAll('tr'));
-                    nutritional = nutritional.map((el) => {
-                        el = funInnerText(el);
-                        el = el.split('\n');
-                        if(el[1] != undefined){
-                            nutritionalValues[el[1]] = el[0];
-                        }
-                    });
-
-                    return{
-                        Link : link,
-                        Review : reviewRecipe,
-                        Description : descriptionRecipe,
-                        Author : authorRecipe,
-                        Publish_Update_Date : publishUpdateRecipe,
-                        Image : recipeImage,
-                        Details : timers,
-                        Ingredients : ingredientsRecipe,
-                        Directions : directions,
-                        Nutritional_Values_Per_Serving : nutritionalValues
+                    }catch(err){
+                        console.log(`${link}`);
                     }
                 },mainRecipeLinks[k])
 
                 data[k] = webData;
+
+                fs.writeFile('recipes.json', JSON.stringify(data,null,2), 'utf-8', (err) => {
+                    console.log("Wrote to json file");
+                });
             }
 
         }
@@ -171,10 +184,6 @@ const fs = require('fs');
 
 
     await browser.close();
-
-    fs.writeFile('recipes.json', JSON.stringify(data,null,2), 'utf-8', () => {
-        console.log("Done.");
-  });
 
     return data;
 
